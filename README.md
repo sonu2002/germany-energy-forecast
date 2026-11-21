@@ -12,7 +12,9 @@ How much electricity will Germany need tomorrow, hour by hour? This project fore
 (grid load) for the next day with a **calibrated 80% uncertainty band**. It retrains and republishes every morning,
 fully automated with **GitHub Actions**, using open data from the Federal Network Agency (Bundesnetzagentur / SMARD).
 
-![Dashboard](docs/preview.png)
+![30-second demo: the live page in a real browser](docs/demo.gif)
+
+<sub>30-second screen recording of the live page (forecast and backtest). [Open it yourself ↗](https://sonu2002.github.io/germany-energy-forecast/)</sub>
 
 ## Results (out-of-sample backtest)
 
