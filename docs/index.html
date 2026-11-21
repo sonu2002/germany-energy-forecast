@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Germany electricity demand: day-ahead forecast</title>
+<meta name="description" content="Live day-ahead forecast of Germany's electricity demand with a calibrated 80% interval. Gradient boosting on SMARD data, updated daily by GitHub Actions." />
+<style>
+:root{--bg:#0b0b0b;--panel:#121212;--ink:#ebe6dd;--muted:#8c867c;--line:rgba(235,230,221,.1);--red:#c4323a;--steel:#8fa3b8;--band:rgba(196,50,58,.16)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:"Inter","Helvetica Neue",system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1160px;margin:0 auto;padding:0 22px}
+header{padding:56px 0 26px;border-bottom:1px solid var(--line)}
+.eyebrow{font-size:11.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);display:flex;gap:12px;align-items:center}
+.eyebrow::before{content:"";width:34px;height:1px;background:var(--red)}
+h1{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:clamp(34px,5vw,56px);line-height:1.05;margin:14px 0 12px;letter-spacing:-.01em}
+h1 em{color:var(--red);font-style:italic}
+.lead{color:#b9b2a7;max-width:760px}
+.meta{margin-top:14px;font-size:13px;color:var(--muted)}
+.meta b{color:var(--ink);font-weight:600}
+.live{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;letter-spacing:.18em;text-transform:uppercase;color:#d9d2c6;border:1px solid var(--line);padding:5px 10px;margin-top:18px}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--red);animation:p 2.2s infinite}
+@keyframes p{0%{box-shadow:0 0 0 0 rgba(196,50,58,.6)}70%{box-shadow:0 0 0 8px rgba(196,50,58,0)}100%{box-shadow:0 0 0 0 rgba(196,50,58,0)}}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:30px 0}
+.kpi{background:var(--panel);border:1px solid var(--line);border-left:1px solid var(--red);padding:18px 18px 16px}
+.kpi b{display:block;font-family:Georgia,serif;font-weight:400;font-size:34px;line-height:1.05;font-variant-numeric:lining-nums tabular-nums}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);padding:20px 20px 14px;margin-bottom:16px}
+.panel.wide{grid-column:span 2}
+.panel h2{font-family:Georgia,serif;font-weight:400;font-size:22px;margin-bottom:2px}
+.panel p.s{font-size:13px;color:var(--muted);margin-bottom:10px}
+.legend{display:flex;gap:18px;font-size:12px;color:var(--muted);margin:4px 0 6px;flex-wrap:wrap}
+.legend i{display:inline-block;width:18px;height:2px;vertical-align:middle;margin-right:6px}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--muted);font-size:11px;font-family:inherit}
+.tip{position:fixed;pointer-events:none;background:#000;border:1px solid var(--line);padding:6px 9px;font-size:12px;opacity:0;transition:opacity .15s;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-variant-numeric:tabular-nums}
+th{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+tr.best td{color:var(--ink);font-weight:600}
+tr.best td:first-child{border-left:2px solid var(--red);padding-left:10px}
+.notes{columns:2;column-gap:34px;font-size:14px;color:#b9b2a7}
+.notes p{margin-bottom:10px;break-inside:avoid}
+.notes b{color:var(--ink)}
+footer{padding:30px 0 50px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);margin-top:20px}
+a{color:var(--ink);text-decoration:none;border-bottom:1px solid var(--red)}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}.grid{grid-template-columns:1fr}.panel.wide{grid-column:auto}.notes{columns:1}}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="eyebrow">Machine learning · Time series · Energy</div>
+    <h1>How much electricity will Germany need <em>tomorrow?</em></h1>
+    <p class="lead">A day-ahead forecast of national electricity demand with a calibrated 80% interval. The model is retrained and the forecast republished every morning by GitHub Actions, using open data from the Federal Network Agency (SMARD).</p>
+    <div class="live"><i></i>Updated automatically every day</div>
+    <div class="meta">Forecast for <b id="fday">…</b> · issued with data until <b id="issued">…</b> (Berlin time)</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="kpis" id="kpis"></section>
+
+  <div class="grid">
+    <div class="panel wide">
+      <h2>Tomorrow, hour by hour</h2>
+      <p class="s">Point forecast and 80% interval in gigawatts (average load per hour).</p>
+      <div class="legend"><span><i style="background:var(--red)"></i>Forecast</span><span><i style="background:var(--band);height:8px"></i>80% interval</span></div>
+      <svg id="cFc" viewBox="0 0 1000 300"></svg>
+    </div>
+    <div class="panel wide">
+      <h2>Last 14 days: forecast vs. reality</h2>
+      <p class="s">Out-of-sample: each day was predicted the evening before, by a model that never saw it.</p>
+      <div class="legend"><span><i style="background:var(--steel)"></i>Actual demand</span><span><i style="background:var(--red)"></i>Forecast</span><span><i style="background:var(--band);height:8px"></i>80% interval</span></div>
+      <svg id="cBt" viewBox="0 0 1000 300"></svg>
+    </div>
+    <div class="panel">
+      <h2>Error by hour of day</h2>
+      <p class="s" id="hourNote">MAPE over the whole test period (%).</p>
+      <svg id="cHour" viewBox="0 0 500 240"></svg>
+    </div>
+    <div class="panel">
+      <h2>Renewable share, last 90 days</h2>
+      <p class="s">Solar + wind generation as a share of daily demand (%).</p>
+      <svg id="cRen" viewBox="0 0 500 240"></svg>
+    </div>
+    <div class="panel wide">
+      <h2>Backtest results</h2>
+      <p class="s" id="period"></p>
+      <table id="tbl"><thead><tr><th>Model</th><th>MAPE</th><th>MAE</th></tr></thead><tbody></tbody></table>
+    </div>
+    <div class="panel wide">
+      <h2>How it works</h2>
+      <div class="notes">
+        <p><b>Setting.</b> At midnight after day D, all 24 hours of day D+1 are predicted. Features only use information known at that moment: the same hour 1, 2, 7 and 14 days earlier, yesterday's mean, min and max, last week's mean, calendar features and German public holidays (incl. Easter-based ones, computed from scratch). A unit test checks that nothing from the forecast day leaks into the features.</p>
+        <p><b>Model.</b> scikit-learn <code>HistGradientBoostingRegressor</code> trained on hourly data since 2023. It is compared against two honest baselines: the same hour yesterday, and the same hour last week.</p>
+        <p><b>Uncertainty.</b> The 80% band uses split-conformal calibration: hour-specific quantiles of out-of-sample errors. In the backtest the true value fell inside the band in <span id="cov">…</span> of hours (target: 80%).</p>
+        <p><b>Automation.</b> A scheduled GitHub Actions workflow downloads new SMARD data, runs the tests, re-runs the backtest, writes <code>docs/data/dashboard.json</code> and commits it. This page is static and reads that file.</p>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="wrap">Data: Bundesnetzagentur | SMARD.de, licence CC BY 4.0 · Code: MIT · Built by <a href="https://sonu2002.github.io">Sonu Phogat</a> · <a href="https://github.com/sonu2002/germany-energy-forecast">Source on GitHub</a></footer>
+<div class="tip" id="tip"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d = 1) => v == null ? "–" : v.toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+const tip = $("tip");
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY - 10) + "px"; }
+function hideTip() { tip.style.opacity = 0; }
+
+function lineChart(svg, times, series, opt = {}) {
+  const W = 1000, H = 300, L = 48, R = 12, T = 12, B = 28;
+  const all = series.flatMap(s => (s.band ? s.lo.concat(s.hi) : s.v)).filter(v => v != null);
+  let lo = Math.min(...all), hi = Math.max(...all); const pad = (hi - lo) * .08; lo -= pad; hi += pad;
+  const n = times.length, x = i => L + (W - L - R) * i / Math.max(n - 1, 1), y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo));
+  let g = "";
+  for (let k = 0; k <= 4; k++) { const v = lo + (hi - lo) * k / 4; g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(235,230,221,.07)"/><text x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${v.toFixed(0)}</text>`; }
+  const step = opt.labelEvery || Math.ceil(n / 8);
+  times.forEach((t, i) => { if (i % step === 0) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${opt.label ? opt.label(t) : t}</text>`; });
+  for (const s of series) {
+    if (s.band) {
+      const top = s.hi.map((v, i) => `${x(i)},${y(v)}`), bot = s.lo.map((v, i) => `${x(i)},${y(v)}`).reverse();
+      g += `<polygon points="${top.concat(bot).join(" ")}" fill="var(--band)"/>`;
+    } else {
+      let d = "", pen = false;
+      s.v.forEach((v, i) => { if (v == null) { pen = false; return; } d += (pen ? "L" : "M") + x(i).toFixed(1) + "," + y(v).toFixed(1); pen = true; });
+      g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${s.w || 1.6}" stroke-linejoin="round"/>`;
+    }
+  }
+  g += `<line id="${svg.id}-cur" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="rgba(235,230,221,.25)" opacity="0"/>`;
+  g += `<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent" class="hit"/>`;
+  svg.innerHTML = g;
+  const cur = svg.querySelector(`#${svg.id}-cur`), hit = svg.querySelector(".hit");
+  hit.addEventListener("mousemove", e => {
+    const r = svg.getBoundingClientRect(), px = (e.clientX - r.left) / r.width * W;
+    const i = Math.max(0, Math.min(n - 1, Math.round((px - L) / (W - L - R) * (n - 1))));
+    cur.setAttribute("x1", x(i)); cur.setAttribute("x2", x(i)); cur.setAttribute("opacity", 1);
+    showTip(e, `<b>${times[i].replace("T", " ")}</b><br>` + series.filter(s => s.name).map(s => s.band ? `${s.name}: ${fmt(s.lo[i])}–${fmt(s.hi[i])} GW` : `${s.name}: ${fmt(s.v[i])} GW`).join("<br>"));
+  });
+  hit.addEventListener("mouseleave", () => { cur.setAttribute("opacity", 0); hideTip(); });
+}
+
+function barChart(svg, labels, vals, opt = {}) {
+  const W = 500, H = 240, L = 34, R = 6, T = 10, B = 26, hi = Math.max(...vals) * 1.12, n = vals.length;
+  const bw = (W - L - R) / n, y = v => T + (H - T - B) * (1 - v / hi);
+  const best = Math.max(...vals);
+  let g = "";
+  for (let k = 0; k <= 3; k++) { const v = hi * k / 3; g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(235,230,221,.07)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v.toFixed(1)}</text>`; }
+  vals.forEach((v, i) => {
+    g += `<rect x="${L + i * bw + 2}" y="${y(v)}" width="${bw - 4}" height="${H - B - y(v)}" fill="${v === best ? "var(--red)" : "rgba(235,230,221,.28)"}"><title>${labels[i]}: ${v.toFixed(2)}%</title></rect>`;
+    if (i % (opt.every || 1) === 0) g += `<text x="${L + i * bw + bw / 2}" y="${H - 8}" text-anchor="middle">${labels[i]}</text>`;
+  });
+  svg.innerHTML = g;
+}
+
+function areaChart(svg, labels, vals) {
+  const W = 500, H = 240, L = 34, R = 6, T = 10, B = 26, n = vals.length;
+  const x = i => L + (W - L - R) * i / (n - 1), y = v => T + (H - T - B) * (1 - v / 100);
+  let g = "";
+  for (const v of [0, 25, 50, 75, 100]) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="rgba(235,230,221,.07)"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  const pts = vals.map((v, i) => `${x(i)},${y(Math.min(v, 100))}`);
+  g += `<polygon points="${x(0)},${y(0)} ${pts.join(" ")} ${x(n - 1)},${y(0)}" fill="rgba(143,163,184,.18)"/><polyline points="${pts.join(" ")}" fill="none" stroke="var(--steel)" stroke-width="1.5"/>`;
+  labels.forEach((t, i) => { if (i % 15 === 0) g += `<text x="${x(i)}" y="${H - 8}" text-anchor="middle">${t.slice(5)}</text>`; });
+  const avg = vals.reduce((a, b) => a + b, 0) / n;
+  g += `<line x1="${L}" x2="${W - R}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--red)" stroke-dasharray="4 4"/><text x="${W - R}" y="${y(avg) - 6}" text-anchor="end" style="fill:var(--ink)">avg ${avg.toFixed(0)}%</text>`;
+  svg.innerHTML = g;
+}
+
+fetch("data/dashboard.json").then(r => r.json()).then(d => {
+  const m = d.metrics, f = d.forecast, best = m.models["Gradient boosting (this project)"];
+  $("fday").textContent = new Date(d.forecast_day + "T12:00").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  $("issued").textContent = d.issued_with_data_until;
+  const pk = Math.max(...f.gw), pi = f.gw.indexOf(pk), mn = Math.min(...f.gw), mi = f.gw.indexOf(mn);
+  const kp = [[fmt(pk) + " GW", `peak tomorrow at ${f.time[pi].slice(11)}`], [fmt(mn) + " GW", `lowest at ${f.time[mi].slice(11)}`],
+              [fmt(best["MAPE_%"], 2) + "%", "average error (MAPE) in backtest"],
+              [m["improvement_vs_best_naive_%"] + "%", "lower error than the best naive baseline"],
+              [m["interval_80_coverage_%"] + "%", "of hours inside the 80% band"]];
+  $("kpis").innerHTML = kp.map(([b, s]) => `<div class="kpi"><b>${b}</b><span>${s}</span></div>`).join("");
+  lineChart($("cFc"), f.time, [{ band: true, lo: f.p10, hi: f.p90, name: "80% interval" }, { v: f.gw, color: "var(--red)", w: 2.2, name: "Forecast" }],
+            { labelEvery: 3, label: t => t.slice(11) });
+  const b = d.backtest_recent;
+  lineChart($("cBt"), b.time, [{ band: true, lo: b.p10, hi: b.p90, name: "80% interval" }, { v: b.actual, color: "var(--steel)", name: "Actual" }, { v: b.model, color: "var(--red)", w: 1.3, name: "Forecast" }],
+            { labelEvery: 48, label: t => t.slice(5, 10) });
+  barChart($("cHour"), [...Array(24).keys()].map(h => String(h).padStart(2, "0")), m.mape_by_hour, { every: 3 });
+  const worst = m.mape_by_hour.indexOf(Math.max(...m.mape_by_hour)), easiest = m.mape_by_hour.indexOf(Math.min(...m.mape_by_hour));
+  $("hourNote").textContent = `MAPE over the whole test period (%). Hardest hour: ${String(worst).padStart(2, "0")}:00, easiest: ${String(easiest).padStart(2, "0")}:00. Midday is harder because rooftop solar changes how much power is drawn from the grid.`;
+  areaChart($("cRen"), d.renewable_share_90d.date, d.renewable_share_90d.share);
+  $("period").textContent = `Trained on ${m.train_period[0]} – ${m.train_period[1]}, tested on ${m.test_period[0]} – ${m.test_period[1]} (${m.test_hours.toLocaleString("en-US")} hours never seen in training).`;
+  const rows = Object.entries(m.models).sort((a, c) => a[1]["MAPE_%"] - c[1]["MAPE_%"]);
+  $("tbl").querySelector("tbody").innerHTML = rows.map(([k, v], i) => `<tr class="${i === 0 ? "best" : ""}"><td>${k}</td><td>${v["MAPE_%"].toFixed(2)}%</td><td>${Math.round(v.MAE_MW).toLocaleString("en-US")} MW</td></tr>`).join("");
+  $("cov").textContent = m["interval_80_coverage_%"] + "%";
+}).catch(e => { $("kpis").innerHTML = `<p class="s">Could not load data (${e}).</p>`; });
+</script>
+</body>
+</html>
