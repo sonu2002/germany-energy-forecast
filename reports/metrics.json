@@ -5,35 +5,35 @@
   ],
   "test_period": [
     "2025-07-01",
-    "2026-11-21"
+    "2026-11-22"
   ],
-  "test_hours": 12217,
+  "test_hours": 12241,
   "models": {
     "Gradient boosting (this project)": {
-      "MAPE_%": 2.75,
-      "MAE_MW": 1450.0
+      "MAPE_%": 2.74,
+      "MAE_MW": 1449.0
     },
     "Naive: same hour last week": {
       "MAPE_%": 4.81,
-      "MAE_MW": 2542.0
+      "MAE_MW": 2541.0
     },
     "Naive: same hour yesterday": {
       "MAPE_%": 7.41,
-      "MAE_MW": 3856.0
+      "MAE_MW": 3853.0
     }
   },
-  "improvement_vs_best_naive_%": 42.8,
+  "improvement_vs_best_naive_%": 43.0,
   "interval_80_coverage_%": 80.0,
   "mape_by_hour": [
     2.54,
     2.61,
     2.66,
     2.6,
-    2.49,
+    2.5,
     2.52,
     2.59,
-    2.4,
-    2.47,
+    2.39,
+    2.46,
     2.45,
     2.76,
     3.07,
@@ -56,8 +56,8 @@
     2.38,
     2.84,
     2.67,
-    3.31,
-    2.83
+    3.3,
+    2.82
   ],
-  "live_forecast_for": "2026-11-22"
+  "live_forecast_for": "2026-11-23"
 }
